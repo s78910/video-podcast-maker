@@ -163,16 +163,31 @@ Create `videos/{name}/podcast.txt` with section markers:
 {outroClosing}
 ```
 
-**Numbers MUST use Chinese pronunciation** for correct TTS:
+**Number formatting for TTS**
+
+Modern TTS backends (Azure, Edge, Doubao, CosyVoice) handle **most everyday numbers** correctly when written in ASCII digits. Spell out only the forms TTS engines read ambiguously.
+
+**✅ Safe to write as digits** (TTS reads them correctly):
+
+| Type | Example | Read as |
+|------|---------|---------|
+| Integer with Chinese unit | `2900万`, `5亿`, `300块` | 二千九百万 / 五亿 / 三百块 |
+| Simple percentage | `15%`, `90%`, `-10%` | 百分之十五 / 百分之九十 / 负百分之十 |
+| Simple decimal | `1.2`, `3.5` | 一点二 / 三点五 |
+| English unit (tech) | `128GB`, `16核`, `4K` | 一百二十八G / 十六核 / 四K |
+| Small integer (<100) | `29`, `50` | 二十九 / 五十 |
+
+**⚠ Must spell out in Chinese** (TTS reads ambiguously or wrong):
 
 | Type | Wrong | Correct |
 |------|-------|---------|
-| Integer | 29, 3999 | 二十九，三千九百九十九 |
-| Decimal | 1.2, 3.5 | 一点二，三点五 |
-| Percentage | 15%, -10% | 百分之十五，负百分之十 |
-| Date | 2025-01-15 | 二零二五年一月十五日 |
-| Large number | 6144 | 六千一百四十四 |
-| English units | 128GB | 一百二十八G |
+| Date | `2025-01-15` | 二零二五年一月十五日 |
+| Year (when stressing "零" reading) | `2025年` | 二零二五年 |
+| Version number | `v1.2.3`, `4.6` | 一点二点三 / 四点六 |
+| Phone / ID string | `400-123-4567` | 四零零 一二三 四五六七 |
+| Long bare integer (no unit) | `3999999` | 三百九十九万九千九百九十九 (or add 万) |
+
+**Rule of thumb:** if a number has a Chinese unit after it (`万`/`亿`/`%`/`GB`/`块`/`点`…) or is naturally pronounced in one way, leave it as digits. If it's a date, code, or unitless large integer, write it in Chinese.
 
 **Section notes**:
 - **hero**: MUST start with `content.heroOpening` if set in user_prefs, followed by the topic hook
