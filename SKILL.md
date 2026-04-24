@@ -53,50 +53,11 @@ Or invoke directly: `/video-podcast-maker AI Agent tutorial`
 
 ---
 
-## Design Learning
+## Design Learning (Optional)
 
-Extract visual design patterns from reference videos or images, store them in a searchable library, and apply them to new video compositions.
+Extract visual design patterns from reference videos or images and apply them to new video compositions. **Skip this section unless** the user provides a reference video/image or asks to save/list/delete style profiles.
 
-### Commands
-
-```bash
-# Learn from images (use your agent's image analysis capability to analyze design patterns)
-python3 scripts/learn_design.py ./screenshot1.png ./screenshot2.png
-
-# Learn from a local video (ffmpeg extracts frames automatically)
-python3 scripts/learn_design.py ./reference.mp4
-
-# Learn from a URL (Playwright captures screenshots — experimental)
-python3 scripts/learn_design.py https://www.bilibili.com/video/BV1xx411c7mD
-
-# Save with a named profile and tags
-python3 scripts/learn_design.py ./reference.mp4 --profile "tech-minimal" --tags "tech,minimal,dark"
-```
-
-### Reference Library Commands
-
-```
-references list          # List all stored references (auto-cleans orphaned entries)
-references show <id>     # Show full design report for a reference
-references delete <id>   # Delete a reference and its files
-```
-
-### Style Profile Commands
-
-```
-profiles list            # List all saved style profiles
-profiles show <name>     # Show profile props_override
-profiles delete <name>   # Delete a style profile
-profiles create <name>   # Create a new style profile interactively
-```
-
-### Pre-Workflow Usage
-
-When the user provides a reference video or image alongside a video creation request, extract design patterns before Step 1 and apply them as session overrides. See `references/workflow-script.md` → Pre-workflow section for the full extraction flow.
-
-### Step 9 Integration
-
-Before choosing visual design in Step 9, check for matching style profiles or reference library entries. Apply the best match as a starting point for Remotion composition props. See `references/workflow-production.md` → Step 9 Style Profile Integration for the priority chain.
+→ See **[references/design-learning.md](references/design-learning.md)** for commands, reference-library management, style-profile management, and integration with Pre-workflow / Step 9.
 
 ---
 
@@ -231,6 +192,7 @@ Load these files on demand — **do NOT load all at once**:
   - **[workflow-production.md](references/workflow-production.md)** — Steps 5-11 (media, TTS, Remotion, render, BGM)
   - **[workflow-publish.md](references/workflow-publish.md)** — Steps 12-15 (subtitles, publish, cleanup, shorts)
 - **[references/design-guide.md](references/design-guide.md)**: Visual minimums, typography, layout patterns, checklists. **MUST load before Step 9.**
+- **[references/design-learning.md](references/design-learning.md)**: Extracting visual patterns from reference videos/images, style profiles. Load only when the user provides a reference or manages profiles.
 - **[references/troubleshooting.md](references/troubleshooting.md)**: Error fixes, BGM options, preference commands, preference learning. Load on error or user request.
 - **[examples/](examples/)**: Real production video projects. The agent may reference these for composition structure and `timing.json` format.
 
