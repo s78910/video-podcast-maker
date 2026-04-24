@@ -60,15 +60,35 @@ def load_phoneme_dicts(input_file, phoneme_file=None):
 def extract_inline_phonemes(text):
     """Extract inline phoneme markers from text: 执行器[zhí xíng qì]
 
+    The regex greedily captures every Chinese character before '[', but only
+    the last N chars (where N = pinyin syllable count, since Chinese is one
+    char per syllable) are treated as the annotated word. Any extra Chinese
+    prefix is left intact in the clean text.
+
+    Example: "每个执行器[zhí xíng qì]" → key "执行器" (3 syllables → last 3 chars),
+    clean text "每个执行器". Without this rule the greedy run would wrongly
+    attach "每个" to the phoneme tag and produce 5-char text under a 3-syllable
+    SSML wrapper, which TTS engines mispronounce.
+
     Returns: (clean_text, phoneme_dict)
     """
     pattern = r'([\u4e00-\u9fff]+)\[([a-zA-Zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü\s]+)\]'
     phonemes = {}
 
     def extract(m):
-        word, pinyin = m.group(1), m.group(2)
+        preceding = m.group(1)
+        pinyin = m.group(2).strip()
+        syllables = len(pinyin.split())
+        if syllables == 0:
+            return m.group(0)  # degenerate — leave untouched
+        if syllables >= len(preceding):
+            word = preceding
+            prefix = ""
+        else:
+            word = preceding[-syllables:]
+            prefix = preceding[:-syllables]
         phonemes[word] = pinyin
-        return word
+        return prefix + word
 
     clean = re.sub(pattern, extract, text)
     return clean, phonemes

@@ -6,37 +6,45 @@ from tts.phonemes import extract_inline_phonemes, pinyin_to_sapi
 
 
 def test_extract_single_marker():
-    """Inline marker is extracted; brackets disappear from clean text.
+    """Syllable count in pinyin decides how many preceding chars form the word.
 
-    KNOWN LIMITATION: the regex greedily captures ALL Chinese characters
-    immediately preceding the `[` — so "每个执行器[zhí xíng qì]" yields key
-    "每个执行器", not just "执行器". Downstream SSML will wrap the extra
-    prefix in the phoneme tag, which TTS may mispronounce. The test below
-    locks in current behavior so a future fix is a deliberate change.
+    "每个执行器[zhí xíng qì]" has 3 syllables → key is the last 3 chars
+    ("执行器"), not the full greedy Chinese run "每个执行器". Clean text still
+    preserves the prefix "每个".
     """
     text = "每个执行器[zhí xíng qì]都有自己的窗口"
     clean, phonemes = extract_inline_phonemes(text)
     assert clean == "每个执行器都有自己的窗口"
-    assert phonemes == {"每个执行器": "zhí xíng qì"}  # current (greedy) behavior
+    assert phonemes == {"执行器": "zhí xíng qì"}
 
 
 def test_extract_single_marker_tight():
-    """When the annotated word is preceded by punctuation, the key is clean."""
+    """When the annotated word is preceded by punctuation, key is unambiguous."""
     text = "上下文，执行器[zhí xíng qì]处理请求"
     clean, phonemes = extract_inline_phonemes(text)
     assert phonemes == {"执行器": "zhí xíng qì"}
 
 
 def test_extract_multiple_markers():
-    """Multi-marker extraction — also subject to the greedy-prefix limitation.
-
-    In "执行器[...]和重做[...]" the second marker captures "和重做" because the
-    Chinese run is unbroken. See test_extract_single_marker for context.
-    """
+    """Each marker independently picks the last-N chars matching its syllables."""
     text = "执行器[zhí xíng qì]和重做[chóng zuò]都很常用"
     clean, phonemes = extract_inline_phonemes(text)
     assert "[" not in clean
-    assert phonemes == {"执行器": "zhí xíng qì", "和重做": "chóng zuò"}
+    assert phonemes == {"执行器": "zhí xíng qì", "重做": "chóng zuò"}
+
+
+def test_extract_preserves_prefix_in_clean_text():
+    """Greedy Chinese run is split, but the prefix is not dropped — it stays in text."""
+    text = "每个执行器[zhí xíng qì]"
+    clean, _ = extract_inline_phonemes(text)
+    assert clean == "每个执行器"
+
+
+def test_extract_syllables_exceed_preceding_chars():
+    """If pinyin has more syllables than available Chinese chars, take all chars."""
+    text = "器[zhí xíng qì]"  # 1 char, 3 syllables
+    _, phonemes = extract_inline_phonemes(text)
+    assert phonemes == {"器": "zhí xíng qì"}
 
 
 def test_extract_no_markers():
