@@ -19,9 +19,6 @@ dist/
 out/
 bundle/
 
-# Tests
-tests/
-
 # Design references
 design_references/
 
