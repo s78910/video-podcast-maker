@@ -64,24 +64,20 @@ npx remotion still src/remotion/index.ts Thumbnail3x4 videos/{name}/thumbnail_re
 
 ## Step 8: Generate TTS Audio
 
-**Preference application:** Read backend/rate/voice from `user_prefs.tts`.
-
-**Agent MUST** extract `tts.backend` from `user_prefs.json` and pass it via `TTS_BACKEND` env var. The script does NOT read user_prefs.json directly — it defaults to `edge` if no env var is set.
+**Preference application:** `generate_tts.py` reads `user_prefs.tts.{backend, rate, voices.<backend>}` automatically. No manual env extraction needed. Precedence for each setting: env var > `user_prefs.json` > hardcoded default. The script logs which source it picked at startup.
 
 ```bash
-# Primary command — ALWAYS pass TTS_BACKEND from user_prefs
-TTS_BACKEND=$(python3 -c "import json; print(json.load(open('${SKILL_DIR}/user_prefs.json'))['global']['tts']['backend'])") \
-  python3 ${SKILL_DIR}/scripts/generate_tts.py --input videos/{name}/podcast.txt --output-dir videos/{name}
+# Primary command — backend, rate, and voice all auto-resolved from user_prefs
+python3 ${SKILL_DIR}/scripts/generate_tts.py --input videos/{name}/podcast.txt --output-dir videos/{name}
 
 # Resume from breakpoint
-TTS_BACKEND=$(python3 -c "import json; print(json.load(open('${SKILL_DIR}/user_prefs.json'))['global']['tts']['backend'])") \
-  python3 ${SKILL_DIR}/scripts/generate_tts.py --input videos/{name}/podcast.txt --output-dir videos/{name} --resume
+python3 ${SKILL_DIR}/scripts/generate_tts.py --input videos/{name}/podcast.txt --output-dir videos/{name} --resume
 
 # Dry run (estimate duration)
 python3 ${SKILL_DIR}/scripts/generate_tts.py --input videos/{name}/podcast.txt --output-dir videos/{name} --dry-run
 ```
 
-Backend selection via env: `TTS_BACKEND=azure|cosyvoice|edge`, rate via `TTS_RATE="+5%"`.
+Override per-run (without editing user_prefs): `TTS_BACKEND=edge TTS_RATE="+10%" python3 ...`. CLI `--backend <name>` also works and takes top priority.
 
 ### Voice Selection by Language
 
@@ -323,31 +319,31 @@ The vertical composition reuses Video.tsx with `orientation: "vertical"`. All co
 
 ### BGM Selection
 
-**Auto mode:** Select BGM based on topic type:
-- Tech/coding/tutorial → `snow-stevekaldes-piano-397491.mp3` (calm)
-- Product review/news/upbeat → `perfect-beauty-191271.mp3` (positive)
-- User provided custom BGM → use their file
-
-**Interactive mode:** Ask user to choose or provide their own.
+**Default**: track is read from `user_prefs.bgm.track` (logical name) and resolved to a file via `user_prefs.bgm.tracks` (logical → filename map). Use the helper:
 
 ```bash
-# Default: auto-selected track
-cp ${SKILL_DIR}/assets/{selected-track}.mp3 videos/{name}/bgm.mp3
+# Copy the configured BGM track to the per-video dir
+cp "$(python3 ${SKILL_DIR}/scripts/resolve_bgm_path.py)" videos/{name}/bgm.mp3
+```
 
-# Or user's custom BGM
+**Override (custom BGM)**: skip the helper and copy any file:
+```bash
 cp /path/to/user-bgm.mp3 videos/{name}/bgm.mp3
 ```
 
+**Override (different built-in track)**: edit `user_prefs.bgm.track` to one of the keys in `bgm.tracks` (e.g. `"calm-piano"`, `"perfect-beauty"`). Add new tracks by dropping the mp3 in `${SKILL_DIR}/assets/` and registering it in `bgm.tracks`.
+
 ### Mix
 
-BGM volume priority: `user_prefs.tts.bgmVolume` > topic-pattern default > `0.05` fallback.
+BGM volume comes from `user_prefs.bgm.volume` (fallback `0.05`), resolved by `scripts/get_pref.py`:
 
 ```bash
-# BGM_VOL from user_prefs.tts.bgmVolume (default 0.05)
+BGM_VOL=$(python3 ${SKILL_DIR}/scripts/get_pref.py global bgm volume --default 0.05)
+
 ffmpeg -y \
   -i videos/{name}/output.mp4 \
   -stream_loop -1 -i videos/{name}/bgm.mp3 \
-  -filter_complex "[0:a]volume=1.0[a1];[1:a]volume=${BGM_VOL:-0.05}[a2];[a1][a2]amix=inputs=2:duration=first[aout]" \
+  -filter_complex "[0:a]volume=1.0[a1];[1:a]volume=${BGM_VOL}[a2];[a1][a2]amix=inputs=2:duration=first[aout]" \
   -map 0:v -map "[aout]" \
   -c:v copy -c:a aac -b:a 192k \
   videos/{name}/video_with_bgm.mp4

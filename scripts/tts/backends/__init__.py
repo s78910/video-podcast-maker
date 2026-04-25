@@ -4,7 +4,7 @@ import os
 import sys
 
 
-def _user_prefs_get(*keys):
+def user_prefs_get(*keys):
     """Read nested key from user_prefs.json. Returns None if missing/unreadable."""
     # __file__ = scripts/tts/backends/__init__.py → skill root is four levels up
     skill_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -31,16 +31,30 @@ def resolve_backend():
     env = os.environ.get('TTS_BACKEND')
     if env:
         return env, 'env'
-    pref = _user_prefs_get('global', 'tts', 'backend')
+    pref = user_prefs_get('global', 'tts', 'backend')
     if pref:
         return pref, 'user_prefs'
     return 'edge', 'default'
 
 
+def resolve_speech_rate():
+    """Resolve TTS speech rate with precedence: env TTS_RATE > user_prefs.json > '+5%'.
+
+    Returns (rate, source) where source is 'env', 'user_prefs', or 'default'.
+    """
+    env = os.environ.get('TTS_RATE')
+    if env:
+        return env, 'env'
+    pref = user_prefs_get('global', 'tts', 'rate')
+    if pref:
+        return pref, 'user_prefs'
+    return '+5%', 'default'
+
+
 def _resolve_voice(backend_name, env_var, default):
     """Resolve voice with precedence: env var > user_prefs.json > hardcoded default."""
     env_val = os.environ.get(env_var)
-    pref_val = _user_prefs_get('global', 'tts', 'voices', backend_name)
+    pref_val = user_prefs_get('global', 'tts', 'voices', backend_name)
     voice = env_val or pref_val or default
     source = 'env' if env_val else 'user_prefs' if pref_val else 'default'
     print(f"  Voice ({backend_name}): {voice} [from {source}]")

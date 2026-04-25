@@ -77,7 +77,9 @@ def main():
         BACKEND = "edge"
         MAX_CHARS = 400
 
-    SPEECH_RATE = os.environ.get("TTS_RATE", "+5%")
+    from tts.backends import resolve_speech_rate
+    SPEECH_RATE, rate_source = resolve_speech_rate()
+    print(f"Speech rate: {SPEECH_RATE} [from {rate_source}]")
 
     # --- Read input ---
     os.makedirs(args.output_dir, exist_ok=True)
