@@ -25,43 +25,18 @@ When the user provides a reference video/image with their video creation request
 
 **Agent behavior:** Auto-execute before Step 1, no user interaction needed.
 
-1. Resolve `SKILL_DIR` to the directory containing this skill's files
-2. Check if `user_prefs.json` exists in `${SKILL_DIR}`
-3. If not, copy from `${SKILL_DIR}/user_prefs.template.json`
-3. Read preferences, **check version and migrate if needed**, then apply in subsequent steps
+Run the migrator — it creates `user_prefs.json` from the template if absent, deep-merges any new template fields into existing prefs, and applies structural rewrites for old versions. Idempotent (no-op when already current).
 
 ```bash
 SKILL_DIR="${SKILL_DIR:-${CLAUDE_SKILL_DIR}}"
-PREFS_FILE="$SKILL_DIR/user_prefs.json"
-TEMPLATE_FILE="$SKILL_DIR/user_prefs.template.json"
-
-if [ ! -f "$PREFS_FILE" ]; then
-  cp "$TEMPLATE_FILE" "$PREFS_FILE"
-  echo "✓ Created default preferences"
-fi
+python3 "${SKILL_DIR}/scripts/migrate_prefs.py"
 ```
 
-### Preference Migration
+Then read `${SKILL_DIR}/user_prefs.json` and apply settings in subsequent steps. Use `--dry-run` first if you want to preview changes without writing.
 
-After loading `user_prefs.json`, check the `version` field and migrate if outdated:
+The script prints one of: `already at v1.6 — no migration needed`, `Created user_prefs.json at v1.6 from template`, or `Migrated from v{old} to v1.6` with a per-change list. To inspect what each version added, see the inline `_structural_migrate` table in `scripts/migrate_prefs.py`.
 
-| From | To | Migration |
-|------|----|-----------|
-| `1.0` | `1.1` | Add top-level `topic_patterns`, `style_profiles`, `design_references`, `learning_history` |
-| `1.1` | `1.2` | Convert `tts.voice` (string) → `tts.voices` (per-backend object, preserving user's voice for azure/edge); Add `bgm` preferences (volume, track, tracks library) |
-| `1.2` | `1.3` | Add `platform: "bilibili"`, `language: "zh-CN"`, `cta`, `subtitle` fields; expand `progressBar` from boolean to `{ enabled: <old_value>, height: 6, fontSize: 18, activeColor: "auto", position: "bottom" }`; add `content.chapters: true` |
-
-**Migration rules:**
-- Preserve all existing user values — never overwrite what the user has customized
-- Only add missing fields with defaults from `user_prefs.template.json`
-- When migrating `tts.voice` → `tts.voices`: use the old voice value for `azure` and `edge`, use defaults for `doubao` and `cosyvoice`
-- v1.3 → v1.4: No structural changes. Platform enum now accepts `"xiaohongshu"`. Update `version` to `"1.4"`.
-- v1.4 → v1.5: No structural changes. Platform enum now accepts `"douyin"`. Update `version` to `"1.5"`.
-- v1.5 → v1.6: No structural changes. Platform enum now accepts `"weixin-channels"`. Update `version` to `"1.6"`.
-- After migration, update `version` to `"1.6"` and save the file
-- Print: `"✓ Migrated preferences from v{old} to v1.6"`
-
-4. At Step 1 start, inform user of active preferences (if customized):
+At Step 1 start, inform the user of active preferences (if customized):
 
 ```
 "Based on your preferences:
@@ -237,43 +212,9 @@ Report estimated duration. If >12min or <3min, suggest adjustments.
 
 ### Pass 1 — Polyphone scan
 
-Read podcast.txt sentence by sentence. For every Chinese polyphone risk, pick the pronunciation from context. Common ones in tech/explainer content (non-exhaustive — use linguistic judgment):
+Read podcast.txt sentence by sentence. For every Chinese polyphone risk, pick the pronunciation from context.
 
-| 字 | Pinyin choices | Typical context |
-|----|---|---|
-| 行 | háng / xíng | 一行/银行/行业 (háng); 执行/运行/可行/行走 (xíng) |
-| 重 | chóng / zhòng | 重做/重新/重复/重试 (chóng); 重要/重量/严重 (zhòng) |
-| 长 | cháng / zhǎng | 长度/长期 (cháng); 增长/成长/校长 (zhǎng) |
-| 为 | wéi / wèi | 作为/认为/成为 (wéi); 因为/为了 (wèi) |
-| 还 | hái / huán | 还有/还是 (hái); 归还/偿还 (huán) |
-| 着 | zhe / zháo / zhuó | 跟着/沿着 (zhe); 着火/着急 (zháo); 着手/着重 (zhuó) |
-| 差 | chā / chà / chāi | 差别/差距 (chā); 差不多 (chà); 出差 (chāi) |
-| 调 | diào / tiáo | 调研/调查/语调 (diào); 调整/协调 (tiáo) |
-| 分 | fēn / fèn | 分钟/分开/分类 (fēn); 缘分/部分/养分 (fèn) |
-| 中 | zhōng / zhòng | 中间/中央 (zhōng); 中奖/命中 (zhòng) |
-| 处 | chǔ / chù | 处理/相处 (chǔ); 到处/好处 (chù) |
-| 间 | jiān / jiàn | 中间/时间/期间 (jiān); 间隔/间断 (jiàn) |
-| 给 | gěi / jǐ | 给我/给你 (gěi); 供给/补给 (jǐ) |
-| 教 | jiāo / jiào | 教书/教课 (jiāo); 教育/宗教 (jiào) |
-| 模 | mó / mú | 模型/模式/规模 (mó); 模样/一模一样 (mú) |
-| 量 | liàng / liáng | 数量/质量/分量 (liàng); 测量/丈量 (liáng) |
-| 觉 | jué / jiào | 感觉/觉得 (jué); 睡觉/午觉 (jiào) |
-| 应 | yīng / yìng | 应该/应当 (yīng); 答应/反应/适应 (yìng) |
-| 干 | gān / gàn | 干净/相干 (gān); 干活/能干 (gàn) |
-| 转 | zhuǎn / zhuàn | 转弯/转换 (zhuǎn); 转动/旋转 (zhuàn) |
-| 划 | huá / huà | 划船/划算 (huá); 计划/规划 (huà) |
-| 数 | shù / shǔ | 数字/次数 (shù); 数数/数一数 (shǔ) |
-| 当 | dāng / dàng | 当然/应当 (dāng); 适当/上当 (dàng) |
-| 占 | zhān / zhàn | 占卜 (zhān); 占据/占领 (zhàn) |
-| 假 | jiǎ / jià | 假如/假设/假装 (jiǎ); 放假/假期 (jià) |
-| 倒 | dǎo / dào | 倒下/倒闭 (dǎo); 倒车/倒影/倒是 (dào) |
-| 几 | jī / jǐ | 几乎/茶几 (jī); 几个/几次 (jǐ) |
-| 卡 | kǎ / qiǎ | 卡片/打卡 (kǎ); 卡住/关卡 (qiǎ) |
-
-**Rules for writing entries:**
-- **Whole-word keys**, not single characters: `"一行命令": "yì háng mìng lìng"`, never `"行": "háng"`. The applier matches longest-first; whole words avoid catastrophic over-replacement.
-- Pinyin **with tone marks** (ā á ǎ à), space-separated syllables. The TTS layer converts to SAPI numeric tones.
-- Skip any word **already** in global `${SKILL_DIR}/phonemes.json` — duplicates waste a phoneme tag and risk drift.
+**Reference table:** the common-polyphone checklist and pinyin format rules live in **[references/zh-polyphones.md](zh-polyphones.md)** — load that file now if this is your first pre-flight pass, then return here for Pass 2.
 
 ### Pass 2 — English term review
 

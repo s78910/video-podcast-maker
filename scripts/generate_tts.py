@@ -32,27 +32,75 @@ def build_parser():
     return parser
 
 
+_END_PUNCT = ("。", ".", "!", "?")
+_SOFT_PUNCT = "，,;：:、 "
+
+
+def _hard_split(sentence, max_chars):
+    """Split an oversize sentence into pieces each <= max_chars.
+
+    Walks char by char; once the buffer reaches `budget = max_chars - 1`,
+    flushes at the most recent soft-punctuation point inside a small lookback
+    window, falling back to a fixed-width cut if none exists. The headroom of
+    1 char ensures that appending "。" to terminate a piece keeps it under
+    max_chars. Pieces that don't already end in `_END_PUNCT` get "。" added
+    so the caller's chunk packer won't append one and overflow.
+    """
+    if len(sentence) <= max_chars:
+        return [sentence]
+    budget = max_chars - 1
+    lookback = max(8, max_chars // 4)
+    pieces = []
+    buf = ""
+    for ch in sentence:
+        buf += ch
+        if len(buf) >= budget:
+            # Prefer most recent soft-punct break inside the lookback window
+            cut = -1
+            for i in range(len(buf) - 1, max(-1, len(buf) - lookback - 1), -1):
+                if buf[i] in _SOFT_PUNCT:
+                    cut = i
+                    break
+            if cut >= 0:
+                pieces.append(buf[:cut + 1])
+                buf = buf[cut + 1:]
+            else:
+                pieces.append(buf)
+                buf = ""
+    if buf:
+        pieces.append(buf)
+    return [p if p.endswith(_END_PUNCT) else p + "。" for p in pieces]
+
+
 def chunk_text(clean_text, max_chars):
     """Split text into chunks for TTS synthesis.
 
     Handles both Chinese (。；) and English (. ; ? !) sentence boundaries.
+    Sentences longer than `max_chars` are hard-split on soft punctuation,
+    then by fixed width — guarantees no chunk exceeds the backend's limit.
     """
     # Normalize semicolons to periods for splitting
     normalized = clean_text.replace("；", "。")
     # Split on Chinese period, English sentence-ending punctuation, or newlines
-    sentences = re.split(r'(?<=[。.!?])\s*', normalized)
-    chunks = []
-    current_chunk = ""
-    for s in sentences:
+    raw_sentences = re.split(r'(?<=[。.!?])\s*', normalized)
+    # Expand oversize sentences before chunk packing
+    sentences = []
+    for s in raw_sentences:
         s = s.strip()
         if not s:
             continue
+        sentences.extend(_hard_split(s, max_chars))
+
+    chunks = []
+    current_chunk = ""
+    for s in sentences:
+        # +1 for the trailing "。" we may add
         if len(current_chunk) + len(s) + 1 < max_chars:
-            current_chunk += s if s.endswith(("。", ".", "!", "?")) else s + "。"
+            current_chunk += s if s.endswith(_END_PUNCT) else s + "。"
         else:
             if current_chunk:
                 chunks.append(current_chunk)
-            current_chunk = s if s.endswith(("。", ".", "!", "?")) else s + "。"
+            current_chunk = s if s.endswith(_END_PUNCT) else s + "。"
     if current_chunk:
         chunks.append(current_chunk)
     return chunks
@@ -131,6 +179,11 @@ def main():
             print(f"  {s['name']}: \"{s['first_text'][:20]}...\"{status}")
 
     # --- Text cleanup ---
+    # "Read-as" annotation: strip 'X，读作"Y"' (curly or straight quotes) and keep only Y.
+    # This is a fourth, lightweight pronunciation override that works on backends without
+    # SSML support (Doubao / ElevenLabs / OpenAI / Google) by rewriting the source text.
+    # Trade-off: it also changes what the subtitle says (Y appears, X is gone). Prefer the
+    # inline [pinyin] marker or phonemes.json when SSML is available (Azure / Edge).
     clean_text = re.sub(r'([A-Za-z0-9\-]+)，读作["""]([\u4e00-\u9fff]+)["""]', r"\2", clean_text)
     print(f"Text length: {len(clean_text)} characters")
 

@@ -2,7 +2,7 @@
 
 > **When to load:** Whenever you need to locate a specific step. This file is only an index — load the phase file that contains the step you need.
 
-The 14-step workflow is split across three phase files. **Load just the phase you need** — avoid pulling all three unless doing a full top-to-bottom pass.
+The 15-step workflow (plus an optional Step 4.5 pronunciation pre-flight) is split across three phase files. **Load just the phase you need** — avoid pulling all three unless doing a full top-to-bottom pass.
 
 ---
 

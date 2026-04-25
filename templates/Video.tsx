@@ -9,6 +9,14 @@
  *
  * Available components (import from "./components"):
  *   ComparisonCard, Timeline, CodeBlock, QuoteBlock, FeatureGrid, DataBar, StatCounter, FlowChart, IconCard
+ *
+ * LOCALIZATION CONTRACT (read before customizing per video):
+ *   Every visible string below is a zh-CN starter — title, subtitle, section
+ *   labels, outro CTA ("点赞" / "收藏" / "关注" / "下期再见！"), placeholder
+ *   bullet text, etc. When `user_prefs.global.language === "en-US"` (or any
+ *   non-Chinese language) the agent MUST replace ALL literal strings with the
+ *   target-language equivalent before rendering. Do not ship a video where
+ *   Chinese leaks into a non-Chinese composition.
  */
 
 import React from "react";

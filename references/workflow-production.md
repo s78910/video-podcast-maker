@@ -41,7 +41,7 @@ Based on `podcast.txt`, generate `publish_info.md`:
 **Auto mode:** Generate Remotion thumbnails (16:9 + 4:3).
 **Interactive mode:** Ask user: Remotion-generated / AI (imagen skill) / both.
 
-**MUST generate both aspect ratios**: 16:9 (playback page) and 4:3 (feed/activity), both required. 9:16 only when generating vertical video.
+**MUST generate both aspect ratios**: 16:9 (playback page) and 4:3 (feed/activity), both required for horizontal video. (9:16 thumbnail is generated alongside the vertical render in Step 10/15 — not here.)
 
 **Thumbnail design rules** (see `references/design-guide.md` for full spec):
 - Centered layout, title ≥120px bold, icons ≥120px — as large as text length allows
@@ -51,8 +51,6 @@ Based on `podcast.txt`, generate `publish_info.md`:
 ```bash
 npx remotion still src/remotion/index.ts Thumbnail16x9 videos/{name}/thumbnail_remotion_16x9.png --public-dir videos/{name}/
 npx remotion still src/remotion/index.ts Thumbnail4x3 videos/{name}/thumbnail_remotion_4x3.png --public-dir videos/{name}/
-# Optional: vertical thumbnail (only if rendering vertical video)
-npx remotion still src/remotion/index.ts Thumbnail9x16 videos/{name}/thumbnail_remotion_9x16.png --public-dir videos/{name}/
 ```
 
 **xiaohongshu:** Generate 3:4 thumbnail (replaces 4:3):
@@ -81,19 +79,21 @@ Override per-run (without editing user_prefs): `TTS_BACKEND=edge TTS_RATE="+10%"
 
 ### Voice Selection by Language
 
-If user has not customized `tts.voices`, use language-appropriate defaults:
+The default path: edit `user_prefs.json` → `global.tts.voices.<backend>` once for the user's preferred language, then `generate_tts.py` picks it up automatically. Reference defaults if the user has not customized `tts.voices`:
 
 | Language | Azure | Edge | Doubao | CosyVoice |
 |----------|-------|------|--------|-----------|
 | zh-CN | zh-CN-XiaoxiaoNeural | zh-CN-XiaoxiaoNeural | BV001_streaming | longxiaochun |
 | en-US | en-US-JennyNeural | en-US-JennyNeural | BV700_streaming | longlaoshu_v2 |
 
-Set the voice via environment variable before running TTS:
+**Manual override (one-off run, no prefs change)** — set the per-backend env var:
 
 ```bash
-# Example for en-US with Edge TTS
+# Per-backend env vars: AZURE_TTS_VOICE / EDGE_TTS_VOICE / VOLCENGINE_VOICE_TYPE / etc.
 EDGE_TTS_VOICE="en-US-JennyNeural" python3 ${SKILL_DIR}/scripts/generate_tts.py --input videos/{name}/podcast.txt --output-dir videos/{name}
 ```
+
+Precedence: env var > `user_prefs.json` > hardcoded default. The script logs which source it picked at startup.
 
 ### Phoneme Correction (SSML)
 
@@ -154,6 +154,8 @@ cp ${SKILL_DIR}/templates/Video.tsx src/remotion/{PascalCaseName}Video.tsx
 ```
 
 Register in `Root.tsx`. Each video gets its own composition file.
+
+> **Localization required.** `templates/Video.tsx` is a zh-CN starter — every visible literal (titles, subtitles, "总结", "感谢观看", outro CTA "点赞 / 收藏 / 关注 / 下期再见！", placeholder bullets) is Chinese. When `user_prefs.global.language != "zh-CN"`, replace every literal in the copied composition file with the target-language equivalent before the Studio preview. Use the platform/language outro table from `workflow-script.md` Step 4 for the CTA text.
 
 **Naming convention:**
 | Video name | Composition file | Composition ID |
@@ -237,11 +239,14 @@ npm install @remotion/transitions @remotion/paths @remotion/shapes @remotion/med
 
 ### Triple-Click Outro
 
-**Auto mode:** Use pre-made MP4 animation (white for light, black for dark theme).
+**Auto mode:** Use pre-made MP4 animation. Pick the asset by `user_prefs.visual.theme`: `light` → `bilibili-triple-white.mp4`, `dark` → `bilibili-triple-black.mp4`.
 **Interactive mode:** Ask: pre-made MP4 (recommended) / Remotion code-generated.
 
 ```bash
+# Light theme:
 cp ${SKILL_DIR}/assets/bilibili-triple-white.mp4 videos/{name}/media/
+# Dark theme:
+cp ${SKILL_DIR}/assets/bilibili-triple-black.mp4 videos/{name}/media/
 ```
 
 ```tsx
@@ -259,10 +264,11 @@ import { OffthreadVideo, staticFile } from "remotion";
 
 Remotion Studio is **always launched** — both auto and interactive modes. This is the primary review step.
 
-**Kill any existing Studio instance first** to avoid serving stale assets from a previous project:
+**Kill any existing Remotion Studio instance first** to avoid serving stale assets from a previous project. Filter by process name so unrelated dev servers on port 3000 (Vite, Next.js, etc.) are NOT killed:
 
 ```bash
-lsof -ti:3000 | xargs kill -9 2>/dev/null
+# Only kill processes whose command line contains "remotion studio"
+pkill -f "remotion studio" 2>/dev/null || true
 npx remotion studio src/remotion/index.ts --public-dir videos/{name}/
 ```
 

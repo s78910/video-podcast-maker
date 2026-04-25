@@ -24,20 +24,26 @@ python3 scripts/learn_design.py ./reference.mp4 --profile "tech-minimal" --tags 
 
 ## Reference Library Commands
 
-```
-references list          # List all stored references (auto-cleans orphaned entries)
-references show <id>     # Show full design report for a reference
-references delete <id>   # Delete a reference and its files
+All reference-library management goes through `learn_design.py`:
+
+```bash
+python3 scripts/learn_design.py --list                # List all stored references (auto-cleans orphaned entries)
+python3 scripts/learn_design.py --show <REF_ID>       # Show report.json for a specific reference
+python3 scripts/learn_design.py --delete <REF_ID>     # Delete a reference and its files
 ```
 
-## Style Profile Commands
+`<REF_ID>` is the id printed by `--list` (e.g. `bilibili-BV1xx411c7mD`, or an md5-derived id for image sets).
 
-```
-profiles list            # List all saved style profiles
-profiles show <name>     # Show profile props_override
-profiles delete <name>   # Delete a style profile
-profiles create <name>   # Create a new style profile interactively
-```
+## Style Profile Management
+
+Style profiles live under `user_prefs.json` → `style_profiles`. There is no dedicated CLI — manage them by editing the JSON directly, or ask the agent to do it for you in conversation:
+
+- "list my style profiles" → agent reads and prints `user_prefs.style_profiles`
+- "show profile tech-minimal" → agent prints that entry
+- "delete profile tech-minimal" → agent removes that key and saves
+- "create profile tech-minimal from this video" → agent extracts current visual props into a new profile entry
+
+To attach references to a profile when learning, pass `--profile <name>` and `--tags <csv>` to `learn_design.py`.
 
 ---
 
