@@ -1,6 +1,32 @@
 """TTS backend registry."""
+import json
 import os
 import sys
+
+
+def _user_prefs_voice(backend_name):
+    """Read voice for backend from user_prefs.json. Returns None if missing/unreadable."""
+    # __file__ = scripts/tts/backends/__init__.py → skill root is four levels up
+    skill_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    prefs_path = os.path.join(skill_dir, 'user_prefs.json')
+    if not os.path.exists(prefs_path):
+        return None
+    try:
+        with open(prefs_path) as f:
+            prefs = json.load(f)
+        return prefs.get('global', {}).get('tts', {}).get('voices', {}).get(backend_name)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _resolve_voice(backend_name, env_var, default):
+    """Resolve voice with precedence: env var > user_prefs.json > hardcoded default."""
+    voice = os.environ.get(env_var) or _user_prefs_voice(backend_name) or default
+    source = ('env' if os.environ.get(env_var)
+              else 'user_prefs' if _user_prefs_voice(backend_name)
+              else 'default')
+    print(f"  Voice ({backend_name}): {voice} [from {source}]")
+    return voice
 
 
 BACKENDS = {
@@ -93,25 +119,26 @@ def _build_config(name):
     if name == 'azure':
         config['key'] = os.environ['AZURE_SPEECH_KEY']
         config['region'] = os.environ.get('AZURE_SPEECH_REGION', 'eastasia')
-        config['voice'] = os.environ.get('AZURE_TTS_VOICE', 'zh-CN-XiaoxiaoMultilingualNeural')
+        # Default to standard XiaoxiaoNeural — Multilingual variant ignores SAPI phoneme tags for zh-CN
+        config['voice'] = _resolve_voice('azure', 'AZURE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
     elif name == 'edge':
-        config['voice'] = os.environ.get('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
+        config['voice'] = _resolve_voice('edge', 'EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
     elif name == 'doubao':
         config['appid'] = os.environ['VOLCENGINE_APPID']
         config['token'] = os.environ['VOLCENGINE_ACCESS_TOKEN']
         config['cluster'] = os.environ.get('VOLCENGINE_CLUSTER', 'volcano_tts')
-        config['voice'] = os.environ.get('VOLCENGINE_VOICE_TYPE', 'BV001_streaming')
+        config['voice'] = _resolve_voice('doubao', 'VOLCENGINE_VOICE_TYPE', 'BV001_streaming')
         config['endpoint'] = os.environ.get('VOLCENGINE_TTS_ENDPOINT', 'https://openspeech.bytedance.com/api/v1/tts')
     elif name == 'elevenlabs':
         config['key'] = os.environ['ELEVENLABS_API_KEY']
-        config['voice'] = os.environ.get('ELEVENLABS_VOICE_ID', '21m00Tcm4TlvDq8ikWAM')
+        config['voice'] = _resolve_voice('elevenlabs', 'ELEVENLABS_VOICE_ID', '21m00Tcm4TlvDq8ikWAM')
         config['model'] = os.environ.get('ELEVENLABS_MODEL', 'eleven_multilingual_v2')
     elif name == 'openai':
         config['key'] = os.environ['OPENAI_API_KEY']
-        config['voice'] = os.environ.get('OPENAI_TTS_VOICE', 'alloy')
+        config['voice'] = _resolve_voice('openai', 'OPENAI_TTS_VOICE', 'alloy')
         config['model'] = os.environ.get('OPENAI_TTS_MODEL', 'tts-1-hd')
     elif name == 'google':
         config['key'] = os.environ['GOOGLE_TTS_API_KEY']
-        config['voice'] = os.environ.get('GOOGLE_TTS_VOICE', 'en-US-Neural2-F')
+        config['voice'] = _resolve_voice('google', 'GOOGLE_TTS_VOICE', 'en-US-Neural2-F')
         config['language'] = os.environ.get('GOOGLE_TTS_LANGUAGE', 'en-US')
     return config
