@@ -2,7 +2,7 @@
 import os
 import time
 from ..phonemes import apply_phonemes
-from ..ssml import mark_english_terms
+from ..ssml import mark_english_terms, wrap_mode_for
 from .base import check_resume
 
 
@@ -47,7 +47,7 @@ def synthesize(chunks, config, output_dir, resume=False):
         synth.synthesis_word_boundary.connect(word_boundary_cb)
 
         chunk_with_phonemes = apply_phonemes(chunk, phoneme_dict)
-        processed = mark_english_terms(chunk_with_phonemes)
+        processed = mark_english_terms(chunk_with_phonemes, mode=wrap_mode_for('azure', voice))
 
         prosody_block = f'<prosody rate="{speech_rate}">{processed}</prosody>'
         # Multilingual voices have inconsistent style support — when style produces

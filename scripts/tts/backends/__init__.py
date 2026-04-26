@@ -80,6 +80,14 @@ def _resolve_voice(backend_name, env_var, default):
     return voice
 
 
+# `supports_ssml` is the suite-wide source of truth for whether a backend
+# accepts inline SSML markup (<lang>, <phoneme>, <break>, etc.) in the
+# synthesize input. Currently only Azure constructs an SSML doc; the rest
+# pass plain text and would either escape or speak any markup aloud. This
+# field drives:
+#   - tts/ssml.py wrap_mode_for() — picks 'off' for non-SSML backends
+#   - generate_tts.py phoneme warning — emits unified warning for all
+#     non-SSML backends instead of hand-listing names
 BACKENDS = {
     'azure': {
         'module': '.azure',
@@ -87,42 +95,49 @@ BACKENDS = {
         'import': ('azure.cognitiveservices.speech', 'azure-cognitiveservices-speech',
                     'pip install azure-cognitiveservices-speech'),
         'max_chars': 400,
+        'supports_ssml': True,
     },
     'cosyvoice': {
         'module': '.cosyvoice',
         'env': ['DASHSCOPE_API_KEY'],
         'import': ('dashscope', 'dashscope', 'pip install dashscope'),
         'max_chars': 400,
+        'supports_ssml': False,
     },
     'edge': {
         'module': '.edge',
         'env': [],
         'import': ('edge_tts', 'edge-tts', 'pip install edge-tts'),
         'max_chars': 400,
+        'supports_ssml': False,
     },
     'doubao': {
         'module': '.doubao',
         'env': ['VOLCENGINE_APPID', 'VOLCENGINE_ACCESS_TOKEN'],
         'import': ('requests', 'requests', 'pip install requests'),
         'max_chars': 280,
+        'supports_ssml': False,
     },
     'elevenlabs': {
         'module': '.elevenlabs',
         'env': ['ELEVENLABS_API_KEY'],
         'import': ('requests', 'requests', 'pip install requests'),
         'max_chars': 400,
+        'supports_ssml': False,
     },
     'openai': {
         'module': '.openai_tts',
         'env': ['OPENAI_API_KEY'],
         'import': ('requests', 'requests', 'pip install requests'),
         'max_chars': 400,
+        'supports_ssml': False,
     },
     'google': {
         'module': '.google_tts',
         'env': ['GOOGLE_TTS_API_KEY'],
         'import': ('requests', 'requests', 'pip install requests'),
         'max_chars': 400,
+        'supports_ssml': False,
     },
 }
 

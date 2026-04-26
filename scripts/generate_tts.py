@@ -196,14 +196,14 @@ def _run(args, started_at):
     phoneme_dict = {**file_phonemes, **inline_phonemes}
     print(f"Phoneme dictionary: {len(phoneme_dict)} entries (file: {len(file_phonemes)} + inline: {len(inline_phonemes)})")
 
-    if BACKEND == "doubao" and phoneme_dict:
-        print("Warning: Doubao TTS does not support the phoneme system. "
-              "Inline markers and phonemes.json will be ignored. "
-              "Consider using Azure or CosyVoice for phoneme support.", file=sys.stderr)
-    if BACKEND in ("elevenlabs", "openai", "google") and phoneme_dict:
-        print("Warning: ElevenLabs/OpenAI/Google TTS do not support the phoneme system. "
-              "Inline markers and phonemes.json will be ignored. "
-              "Consider using Azure or CosyVoice for phoneme support.", file=sys.stderr)
+    # Phoneme markup is SSML — only emit on backends that consume SSML.
+    # The matrix lives in tts/backends/__init__.py BACKENDS[name]['supports_ssml'].
+    if phoneme_dict and not args.validate:
+        from tts.backends import BACKENDS
+        if not BACKENDS.get(BACKEND, {}).get('supports_ssml'):
+            print(f"Warning: {BACKEND} TTS does not consume SSML. "
+                  "Inline phoneme markers and phonemes.json will be ignored. "
+                  "Consider using Azure for phoneme support.", file=sys.stderr)
 
     # --- Default section ---
     if not sections:

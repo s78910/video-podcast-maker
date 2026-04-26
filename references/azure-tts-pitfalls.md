@@ -57,9 +57,25 @@ The `tts/voice_advisor.py` module analyses your script and prints a recommendati
 
 **Symptom**: `<say-as>` appears to have no effect or produces unexpected output.
 
-**Cause**: `mark_english_terms` wraps every English token in `<lang xml:lang="en-US">`. If you pre-write `<say-as>` in the script, you end up with `<say-as><lang>AI</lang></say-as>` — Azure picks one or the other unpredictably.
+**Cause**: Under Multilingual voice, `mark_english_terms` runs in `aggressive` mode and wraps single English words in `<lang xml:lang="en-US">`. Pre-writing `<say-as>` around the same word produces `<say-as><lang>Word</lang></say-as>` — Azure picks one or the other unpredictably.
 
 **Fix**: Avoid `<say-as>` for English tokens — let voice selection (above) handle it.
+
+---
+
+## How `mark_english_terms` chooses what to wrap
+
+The function in `scripts/tts/ssml.py` runs in one of three modes, picked by `wrap_mode_for(backend, voice)` in the same file:
+
+| Backend × voice | Mode | What gets wrapped |
+|---|---|---|
+| `azure` + standard `zh-CN-XiaoxiaoNeural` | `multi_word_only` | Brand / proper-noun phrases only (Visual Studio Code, Andrew Ng, Apple Intelligence, …). Bare abbreviations (AI, ML, GPT, CLI, API) are left alone — standard voice reads them as natural Chinese letter pronunciations. |
+| `azure` + `zh-CN-XiaoxiaoMultilingualNeural` | `aggressive` | Brand phrases + single English words ≥5 chars with at least one lowercase letter and not in `voice_advisor.COMMON_ABBREVS` (e.g. *transformer*, *embedding*, *Python*). Bare abbreviations still skipped. |
+| `edge` / `cosyvoice` / `doubao` / `elevenlabs` / `openai` / `google` | `off` | Nothing. These backends pass plain text and would either escape or speak `<lang>` tags aloud. |
+
+The matrix is driven by `BACKENDS[name]['supports_ssml']` in `scripts/tts/backends/__init__.py` — change one place and both `wrap_mode_for` and the phoneme-not-supported warning in `generate_tts.py` follow.
+
+To force a specific brand phrase to be wrapped under standard voice, add it to `BRAND_PHRASES` in `scripts/tts/ssml.py`. To force a one-off proper-noun pronunciation in a single script, hand-write `<lang xml:lang="en-US">…</lang>` directly in `podcast.txt`; the placeholder mechanism preserves it through `mark_english_terms`.
 
 ---
 
