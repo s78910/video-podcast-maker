@@ -72,6 +72,23 @@ Automated pipeline to create professional video podcasts from a topic. **Support
 
 ![Workflow](assets/workflow.png)
 
+## ⚠️ For the human reading this (not the AI): manually polish `podcast.txt`, repeatedly
+
+> **This section is for you, the human — not the agent.** Every downstream step — TTS narration, subtitles, section transitions, animation timing, final cut — **is derived from this single `podcast.txt`**. A weak script renders into 4K garbage. No amount of polish downstream saves it.
+>
+> The AI-generated draft is a starting point, nothing more. Do these yourself — **don't hand them off to the AI**:
+>
+> 1. **Mentally read it as the narrator.** Treat each sentence as one breath — if a line forces you to "catch your breath" or backtrack to parse, fix it. Where you stumble silently is where TTS stumbles audibly.
+> 2. **Revise at least three times.**
+>    - Pass 1: typos, awkward phrasing, tongue-twisters
+>    - Pass 2: cut filler, cut throat-clearing intros ("So today we're going to talk about…"), cut redundancy
+>    - Pass 3: tune rhythm — where to pause, where to break a long sentence, which word carries the stress
+> 3. **Read each `[SECTION:xxx]` block end-to-end.** Confirm each section opens with a hook and lands a clean transition into the next — not a bullet-point dump.
+> 4. **Audit numbers, proper nouns, and English terms separately.** ~90% of TTS mispronunciations live here. If pronunciation is wrong, add it to `phonemes.json`; if it just sounds awkward, rewrite it.
+> 5. **Know your length budget.** Estimate **~280 zh-CN chars/min** or **~150 en words/min**. A 5–10 min video means ~1400–2800 chars / 750–1500 words. Don't pad to fill time.
+>
+> **The only acceptance test:** read through it once in your head — does any line make you wince? If yes, don't move on to Step 8 (TTS) yet. Otherwise you're just rendering 4K of something even you don't want to hear.
+
 ## Related Skills
 
 This skill depends on **remotion-best-practices** and works alongside other optional skills:
