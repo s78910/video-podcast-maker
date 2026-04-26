@@ -103,18 +103,29 @@ Format: `MM:SS Chapter Title`, each gap ≥5s.
 
 ### 14.1 Verification
 
-Run the unified verifier — it checks all required files, validates technical specs, audits audio/timing alignment, sanity-checks publish_info.md, AND **auto-fixes common omissions** (e.g. creates `final_video.mp4` from `video_with_bgm.mp4` when subtitles were skipped but the alias step was missed).
+Run the unified verifier — it checks all required files, validates technical specs, audits audio/timing alignment, sanity-checks publish_info.md, AND **auto-fixes common omissions** (e.g. creates `final_video.mp4` from `video_with_bgm.mp4` when subtitles were skipped but the alias step was missed; disable with `--no-fix`).
 
 ```bash
 python3 ${SKILL_DIR}/scripts/verify_output.py videos/{name}/
 ```
 
-Exit codes:
+Exit codes (preserved across all output formats):
 - `0` = all required files present and valid → ready to publish
 - `1` = critical missing or invalid → fix before publishing
 - `2` = warnings only → still publishable, review noted issues
 
-For strict mode (treat warnings as errors), add `--strict`.
+**Flags:**
+- `--strict` — treat any warning as a critical issue (exit 1 instead of 2)
+- `--no-fix` — skip the auto-fix step; preview only (useful for diagnosing what *would* change before any mutation)
+- `--format auto|json|prose` — `auto` (default) emits JSON when stdout is not a TTY; force with `--format json` for orchestrators that need to parse results programmatically; force prose with `--format prose`
+
+Structured envelope on `--format json`:
+
+```bash
+python3 ${SKILL_DIR}/scripts/verify_output.py videos/{name}/ --format json
+# Success: {"ok": true,  "data": {"final_video": {...}, "thumbnails": {...}, "audio_timing": {...}, "warnings": [...], "fixes_applied": [...]}, "meta": {...}}
+# Failure: {"ok": false, "error": {"code": "validation_failed", "missing_required": [...], "errors": [...], "warnings": [...]}, "meta": {...}}
+```
 
 What it checks:
 - Required files: podcast.txt, podcast_audio.{wav,srt}, timing.json, output.mp4, **final_video.mp4**, publish_info.md, both thumbnails

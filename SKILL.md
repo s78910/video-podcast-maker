@@ -220,7 +220,7 @@ After Step 13, before declaring the video done:
 ```bash
 python3 ${SKILL_DIR}/scripts/verify_output.py videos/{name}/
 ```
-Auto-fixes common omissions (creates `final_video.mp4` if missing), validates resolution/codec/duration, checks audio-timing drift, sanity-checks publish_info.md. Exit 0 = green light to publish.
+Auto-fixes common omissions (creates `final_video.mp4` if missing; disable with `--no-fix`), validates resolution/codec/duration, checks audio-timing drift, sanity-checks publish_info.md. Exit 0 = green light to publish; exit 2 = warnings only, still publishable. For machine-readable output add `--format json` (auto when piped). Full flag reference in `references/workflow-publish.md`.
 
 ---
 
