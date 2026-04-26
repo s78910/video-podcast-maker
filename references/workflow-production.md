@@ -341,18 +341,31 @@ cp /path/to/user-bgm.mp3 videos/{name}/bgm.mp3
 
 ### Mix
 
-BGM volume comes from `user_prefs.bgm.volume` (fallback `0.05`), resolved by `scripts/get_pref.py`:
+BGM volume comes from `user_prefs.bgm.volume` (fallback `0.10`), resolved by `scripts/get_pref.py`. The narration bus is boosted +3.5 dB (`volume=1.5`) to lift TTS output (~-26 dB mean) closer to broadcast loudness (~-22 dB mean) without clipping. `amix` uses `normalize=0` so the input-count division (default `/N`) doesn't halve the narration:
 
 ```bash
-BGM_VOL=$(python3 ${SKILL_DIR}/scripts/get_pref.py global bgm volume --default 0.05)
+BGM_VOL=$(python3 ${SKILL_DIR}/scripts/get_pref.py global bgm volume --default 0.10)
 
 ffmpeg -y \
   -i videos/{name}/output.mp4 \
   -stream_loop -1 -i videos/{name}/bgm.mp3 \
-  -filter_complex "[0:a]volume=1.0[a1];[1:a]volume=${BGM_VOL}[a2];[a1][a2]amix=inputs=2:duration=first[aout]" \
+  -filter_complex "[0:a]volume=1.5[a1];[1:a]volume=${BGM_VOL}[a2];[a1][a2]amix=inputs=2:duration=first:normalize=0[aout]" \
   -map 0:v -map "[aout]" \
   -c:v copy -c:a aac -b:a 192k \
   videos/{name}/video_with_bgm.mp4
 ```
+
+**Why these specific values:**
+- `volume=1.5` (narration): Azure TTS WAV is typically -25 to -27 dB mean. ×1.5 lifts it to ~-22 dB while keeping ≥2 dB headroom (no clip on common Chinese phonemes).
+- `volume=${BGM_VOL}` (BGM): default `0.10` = -20 dB. With narration at 1.5×, this gives ~18 dB BGM-vs-narration headroom — clearly audible but never competing. (Previously `0.05` was too quiet relative to the boosted narration.)
+- `amix=...:normalize=0`: prevents amix from dividing each input by `inputs=2`. Without this, narration gets cut to 50% and the whole video sounds quiet.
+
+**Verify loudness after mix:**
+```bash
+ffmpeg -i videos/{name}/video_with_bgm.mp4 -af volumedetect -f null - 2>&1 | grep -E "mean_volume|max_volume"
+# Target: mean -20 to -22 dB, max -1 to -3 dB
+```
+
+If still too quiet for your platform, add `loudnorm=I=-16:TP=-1.5:LRA=11` for EBU R128 broadcast normalization (slower — re-encodes audio).
 
 > **More BGM options and volume tuning:** See `references/troubleshooting.md`.
