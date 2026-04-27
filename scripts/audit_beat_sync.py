@@ -35,6 +35,10 @@ import sys
 import re
 import json
 import os
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cli_envelope  # noqa: E402
 
 
 # Regex helpers -------------------------------------------------------------
@@ -133,6 +137,11 @@ def srt_overlap(subs, range_start, range_end):
 # Main ----------------------------------------------------------------------
 
 def audit(tsx_path, timing_path, srt_path, drift_warn=1.5):
+    """Run the audit. Returns (issues_count, result_dict).
+
+    Raises ValueError if no SECTION_CONFIG entries with `beats:` are found
+    in the .tsx — main() converts this into an 'input_invalid' envelope.
+    """
     tsx_text = open(tsx_path, 'r', encoding='utf-8').read()
     timing = json.loads(open(timing_path, 'r', encoding='utf-8').read())
     srt_text = open(srt_path, 'r', encoding='utf-8').read()
@@ -141,8 +150,9 @@ def audit(tsx_path, timing_path, srt_path, drift_warn=1.5):
     name_to_beats, beats_arrays = parse_beats(tsx_text)
 
     if not name_to_beats:
-        print("No SECTION_CONFIG entries with `beats:` found in", tsx_path, file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(
+            f"No SECTION_CONFIG entries with `beats:` found in {tsx_path}"
+        )
 
     # Header
     print(f"\nAudit: {os.path.basename(tsx_path)}")
@@ -151,20 +161,30 @@ def audit(tsx_path, timing_path, srt_path, drift_warn=1.5):
     print('=' * 100)
 
     issues = 0
+    section_records = []
     for sec in timing['sections']:
         name = sec['name']
         beats_name = name_to_beats.get(name)
         if not beats_name:
             print(f"\n[{name}] no beats array mapped (skipped)")
+            section_records.append({
+                "name": name, "beats_array": None,
+                "status": "no_mapping", "beats": [],
+            })
             continue
         items = beats_arrays.get(beats_name, [])
         if not items:
             print(f"\n[{name}] beats array '{beats_name}' empty or unparseable")
+            section_records.append({
+                "name": name, "beats_array": beats_name,
+                "status": "unparseable", "beats": [],
+            })
             continue
         sec_start = sec['start_time']
         sec_end = sec['start_time'] + sec['duration']
         print(f"\n[{name}]  {sec_start:.2f}-{sec_end:.2f}s  ({len(items)} beats)")
         print(f"  {'BEAT-START':>10}  {'SHOWN':<32}  {'NARRATION (overlap)':<60}")
+        beat_records = []
         items_sorted = sorted(items, key=lambda x: x[0])
         for i, (start_sec, shown) in enumerate(items_sorted):
             abs_start = sec_start + start_sec
@@ -175,10 +195,23 @@ def audit(tsx_path, timing_path, srt_path, drift_warn=1.5):
             flag = ''
             # Heuristic warning: beat starts too far from any SRT entry start
             nearest = min((abs(s - abs_start) for s, _, _ in subs), default=99)
-            if nearest > drift_warn:
+            beat_ok = nearest <= drift_warn
+            if not beat_ok:
                 flag = f' ⚠ drift {nearest:.1f}s'
                 issues += 1
             print(f"  {abs_start:6.2f}s+0  {shown_short:<32}  {narr_short:<60}{flag}")
+            beat_records.append({
+                "start_sec_relative": round(start_sec, 2),
+                "start_sec_absolute": round(abs_start, 2),
+                "shown": shown,
+                "narration_overlap": narration,
+                "nearest_srt_distance_seconds": round(nearest, 2),
+                "ok": beat_ok,
+            })
+        section_records.append({
+            "name": name, "beats_array": beats_name,
+            "status": "audited", "beats": beat_records,
+        })
 
     print('\n' + '=' * 100)
     if issues:
@@ -186,7 +219,27 @@ def audit(tsx_path, timing_path, srt_path, drift_warn=1.5):
         print("   Consider adjusting their startSec to match a nearby SRT entry start.")
     else:
         print("✅ All beats land within {:.1f}s of an SRT boundary.".format(drift_warn))
-    return issues
+
+    audited = [r for r in section_records if r['status'] == 'audited']
+    result = {
+        "tsx": tsx_path,
+        "timing": timing_path,
+        "srt": srt_path,
+        "drift_threshold_seconds": drift_warn,
+        "total_duration_seconds": round(timing['total_duration'], 2),
+        "srt_entry_count": len(subs),
+        "issues_count": issues,
+        "summary": {
+            "sections_total": len(timing['sections']),
+            "sections_audited": len(audited),
+            "sections_skipped_no_mapping": sum(1 for r in section_records if r['status'] == 'no_mapping'),
+            "sections_unparseable": sum(1 for r in section_records if r['status'] == 'unparseable'),
+            "beats_audited": sum(len(r['beats']) for r in audited),
+            "beats_with_drift": issues,
+        },
+        "sections": section_records,
+    }
+    return issues, result
 
 
 def build_parser():
@@ -202,19 +255,62 @@ def build_parser():
     parser.add_argument('--drift-warn', type=float, default=1.5, metavar='SECONDS',
                         help='Drift threshold in seconds; beats more than this far from any '
                              'SRT entry start are flagged (default: 1.5)')
+    cli_envelope.add_format_arg(parser)
     return parser
 
 
 def main():
     args = build_parser().parse_args()
-    srt = args.srt or os.path.join(os.path.dirname(args.timing), 'podcast_audio.srt')
-    missing = [p for p in (args.tsx, args.timing, srt) if not os.path.exists(p)]
-    if missing:
-        for p in missing:
-            print(f"Not found: {p}", file=sys.stderr)
-        sys.exit(1)
-    issues = audit(args.tsx, args.timing, srt, drift_warn=args.drift_warn)
-    sys.exit(1 if issues else 0)
+    started_at = time.time()
+    json_mode = cli_envelope.use_json(args)
+    if json_mode:
+        sys.stdout = sys.stderr  # route audit table off stdout in JSON mode
+    try:
+        srt = args.srt or os.path.join(os.path.dirname(args.timing), 'podcast_audio.srt')
+        missing = [p for p in (args.tsx, args.timing, srt) if not os.path.exists(p)]
+        if missing:
+            for p in missing:
+                print(f"Not found: {p}", file=sys.stderr)
+            sys.stdout = sys.__stdout__
+            sys.exit(cli_envelope.emit_error(
+                args, "input_not_found",
+                f"{len(missing)} required file(s) not found",
+                extra={"missing": missing,
+                       "tsx": args.tsx, "timing": args.timing, "srt": srt},
+                started_at=started_at,
+            ))
+
+        try:
+            issues, result = audit(args.tsx, args.timing, srt, drift_warn=args.drift_warn)
+        except ValueError as exc:
+            # parse_beats found no SECTION_CONFIG entries with `beats:`
+            sys.stdout = sys.__stdout__
+            sys.exit(cli_envelope.emit_error(
+                args, "input_invalid", str(exc),
+                field="tsx",
+                extra={"tsx": args.tsx},
+                started_at=started_at,
+            ))
+        except json.JSONDecodeError as exc:
+            sys.stdout = sys.__stdout__
+            sys.exit(cli_envelope.emit_error(
+                args, "input_invalid",
+                f"timing.json is malformed: {exc}",
+                field="timing", extra={"timing": args.timing},
+                started_at=started_at,
+            ))
+    finally:
+        sys.stdout = sys.__stdout__
+
+    if issues:
+        # Audit completed; the *gate* failed — beats drift exceeds threshold.
+        sys.exit(cli_envelope.emit_error(
+            args, "validation_failed",
+            f"{issues} beat(s) more than {args.drift_warn}s from nearest SRT boundary",
+            extra=result,
+            started_at=started_at,
+        ))
+    sys.exit(cli_envelope.emit_success(args, result, started_at=started_at))
 
 
 if __name__ == '__main__':
