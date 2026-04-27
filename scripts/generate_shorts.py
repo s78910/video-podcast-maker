@@ -7,9 +7,13 @@ per-section short video assets (audio slice, timing, composition metadata).
 import os
 import sys
 import json
+import time
 import argparse
 import subprocess
 import re
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cli_envelope  # noqa: E402
 
 
 # ============ Constants ============
@@ -42,11 +46,12 @@ def to_pascal_case(name):
 
 
 def load_timing(input_dir):
-    """Read timing.json from the video directory."""
+    """Read timing.json from the video directory.
+
+    Raises FileNotFoundError if missing, json.JSONDecodeError if malformed.
+    Errors propagate so main() can route them through the envelope.
+    """
     path = os.path.join(input_dir, 'timing.json')
-    if not os.path.exists(path):
-        print(f"Error: timing.json not found in {input_dir}", file=sys.stderr)
-        sys.exit(1)
     with open(path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
@@ -255,37 +260,102 @@ def build_parser():
                         help='Also render shorts after generating (runs npx remotion render)')
     parser.add_argument('--index', default='src/remotion/index.ts',
                         help='Remotion index path for --render (default: src/remotion/index.ts)')
+    cli_envelope.add_format_arg(parser)
     return parser
 
 
 def main():
     args = build_parser().parse_args()
+    started_at = time.time()
+    json_mode = cli_envelope.use_json(args)
+    if json_mode:
+        sys.stdout = sys.stderr  # route prose chatter off stdout
+    try:
+        return _run(args, started_at)
+    finally:
+        sys.stdout = sys.__stdout__
+
+
+def _run(args, started_at):
     input_dir = args.input_dir.rstrip('/')
 
-    # Load data
-    timing = load_timing(input_dir)
+    # Validate inputs at the boundary
+    if not os.path.isdir(input_dir):
+        sys.exit(cli_envelope.emit_error(
+            args, "input_not_found",
+            f"Input directory not found: {input_dir}",
+            field="input_dir", started_at=started_at,
+        ))
+    timing_path = os.path.join(input_dir, 'timing.json')
+    if not os.path.exists(timing_path):
+        sys.exit(cli_envelope.emit_error(
+            args, "input_not_found",
+            f"timing.json not found in {input_dir}",
+            field="input_dir",
+            extra={"expected_path": timing_path},
+            started_at=started_at,
+        ))
+    try:
+        timing = load_timing(input_dir)
+    except json.JSONDecodeError as e:
+        sys.exit(cli_envelope.emit_error(
+            args, "input_invalid",
+            f"timing.json is malformed: {e}",
+            field="input_dir",
+            extra={"path": timing_path},
+            started_at=started_at,
+        ))
+
     script_titles = load_script(input_dir)
 
-    # Filter qualifying sections
-    sections = filter_sections(timing, args.min_duration, args.skip)
+    # Build the structured filter result. We replicate filter_sections() here
+    # rather than calling it because we want per-section skip reasons in the
+    # envelope (filter_sections only returns the kept list).
+    skip_set = {s.strip() for s in args.skip.split(',') if s.strip()}
+    all_section_records = timing.get('sections', [])
+    qualifying = []
+    skipped = []
+    for sec in all_section_records:
+        name = sec['name']
+        if name in skip_set:
+            skipped.append({"name": name, "reason": "in --skip list"})
+        elif sec.get('is_silent', False):
+            skipped.append({"name": name, "reason": "silent section"})
+        elif sec.get('duration', 0) < args.min_duration:
+            skipped.append({
+                "name": name,
+                "reason": f"duration {sec.get('duration', 0):.1f}s below --min-duration {args.min_duration}s",
+            })
+        else:
+            qualifying.append(sec)
 
-    if not sections:
-        skip_list = [s.strip() for s in args.skip.split(',') if s.strip()]
+    shorts_dir = os.path.join(input_dir, 'shorts')
+    result = {
+        "input_dir": input_dir,
+        "video_title": args.title,
+        "min_duration": args.min_duration,
+        "skip": sorted(skip_set),
+        "render_requested": args.render,
+        "all_sections": [s['name'] for s in all_section_records],
+        "qualifying_sections": [s['name'] for s in qualifying],
+        "skipped_sections": skipped,
+        "shorts_dir": shorts_dir,
+        "generated": [],
+        "failed": [],
+    }
+
+    if not qualifying:
+        skip_list = sorted(skip_set)
         print(f"No qualifying sections found.")
         print(f"  Skipped names: {skip_list}")
         print(f"  Min duration: {args.min_duration}s")
-        all_names = [s['name'] for s in timing.get('sections', [])]
-        print(f"  All sections: {all_names}")
-        sys.exit(0)
+        print(f"  All sections: {result['all_sections']}")
+        sys.exit(cli_envelope.emit_success(args, result, started_at=started_at))
 
-    shorts_dir = os.path.join(input_dir, 'shorts')
     os.makedirs(shorts_dir, exist_ok=True)
+    print(f"Generating shorts for {len(qualifying)} sections:\n")
 
-    print(f"Generating shorts for {len(sections)} sections:\n")
-
-    generated = []
-
-    for sec in sections:
+    for sec in qualifying:
         name = sec['name']
         duration = sec.get('duration', 0)
         frames = sec.get('duration_frames', 0)
@@ -293,7 +363,6 @@ def main():
 
         print(f"  [{name}] {duration:.1f}s ({frames} frames)")
 
-        # Create output directory
         output_dir = os.path.join(shorts_dir, name)
         os.makedirs(output_dir, exist_ok=True)
 
@@ -302,6 +371,11 @@ def main():
             print(f"    \u2713 Audio extracted")
         else:
             print(f"    \u2717 Audio extraction failed, skipping")
+            result['failed'].append({
+                "section_name": name,
+                "stage": "extract_audio",
+                "output_dir": output_dir,
+            })
             continue
 
         # 2. Generate timing
@@ -313,29 +387,42 @@ def main():
         comp_id = generate_composition_stub(sec, args.title, output_dir, short_timing, section_title)
         print(f"    \u2713 Composition: {comp_id}")
 
-        generated.append({
-            'comp_id': comp_id,
-            'section_name': name,
-            'total_frames': total,
-            'output_dir': output_dir,
-        })
-
+        rendered = False
         # 4. Optionally render
         if args.render:
-            render_short(output_dir, comp_id, args.index)
+            rendered = render_short(output_dir, comp_id, args.index)
+            if not rendered:
+                result['failed'].append({
+                    "section_name": name,
+                    "stage": "render",
+                    "comp_id": comp_id,
+                    "output_dir": output_dir,
+                })
+
+        result['generated'].append({
+            "comp_id": comp_id,
+            "section_name": name,
+            "total_frames": total,
+            "content_frames": sec.get('duration_frames', 0),
+            "output_dir": output_dir,
+            "audio_extracted": True,
+            "rendered": rendered,
+        })
 
         print()
 
     # Summary
     print("=" * 50)
-    print(f"Generated {len(generated)} shorts in {shorts_dir}/")
-    for g in generated:
+    print(f"Generated {len(result['generated'])} shorts in {shorts_dir}/")
+    for g in result['generated']:
         print(f"  {g['comp_id']}: {g['section_name']} ({g['total_frames']} frames)")
 
     print(f"\nNext steps:")
     print(f"  1. Create Remotion composition files for each short")
     print(f"  2. Render with --public-dir pointing to the short's directory")
     print(f"  3. npx remotion render src/remotion/index.ts <CompId> <output.mp4> --video-bitrate 16M --public-dir <short-dir>/")
+
+    sys.exit(cli_envelope.emit_success(args, result, started_at=started_at))
 
 
 if __name__ == '__main__':
