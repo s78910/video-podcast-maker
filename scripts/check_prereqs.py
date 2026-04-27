@@ -66,13 +66,17 @@ def check_prereqs(env=None):
     }
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         description=__doc__.split("\n\n")[0],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     cli_envelope.add_format_arg(parser)
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
     started_at = time.time()
 
     state = check_prereqs()

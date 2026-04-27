@@ -238,7 +238,7 @@ def render_short(output_dir, comp_id, index_path):
 
 # ============ Main ============
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         description='Generate vertical short video assets from podcast sections',
         epilog='Example: python3 scripts/generate_shorts.py --input-dir videos/how-llms-work/ --title "LLM\u5de5\u4f5c\u539f\u7406"'
@@ -255,8 +255,11 @@ def main():
                         help='Also render shorts after generating (runs npx remotion render)')
     parser.add_argument('--index', default='src/remotion/index.ts',
                         help='Remotion index path for --render (default: src/remotion/index.ts)')
+    return parser
 
-    args = parser.parse_args()
+
+def main():
+    args = build_parser().parse_args()
     input_dir = args.input_dir.rstrip('/')
 
     # Load data

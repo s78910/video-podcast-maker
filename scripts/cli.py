@@ -55,19 +55,19 @@ ACTIONS = {
     'verify': {
         'script': 'verify_output.py',
         'prepend': [],
-        'parser_attr': None,  # parser is inline in main(); no introspection
+        'parser_attr': 'build_parser',
         'description': 'End-of-pipeline acceptance gate (file presence, specs, drift)',
     },
     'audit.beats': {
         'script': 'audit_beat_sync.py',
         'prepend': [],
-        'parser_attr': None,
+        'parser_attr': 'build_parser',
         'description': 'Audit beat-vs-narration alignment in a Remotion video.tsx',
     },
     'shorts.gen': {
         'script': 'generate_shorts.py',
         'prepend': [],
-        'parser_attr': None,
+        'parser_attr': 'build_parser',
         'description': 'Generate vertical shorts assets from a video directory',
     },
     'design.list': {
@@ -97,7 +97,7 @@ ACTIONS = {
     'prereqs': {
         'script': 'check_prereqs.py',
         'prepend': [],
-        'parser_attr': None,
+        'parser_attr': 'build_parser',
         'description': 'Pre-flight check: required CLIs + backend env vars',
     },
     'prefs.get': {
@@ -109,7 +109,7 @@ ACTIONS = {
     'prefs.migrate': {
         'script': 'migrate_prefs.py',
         'prepend': [],
-        'parser_attr': None,
+        'parser_attr': 'build_parser',
         'description': 'Migrate user_prefs.json to the current schema version',
     },
     'prefs.backend': {

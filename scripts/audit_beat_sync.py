@@ -30,6 +30,7 @@ Beat data format expected in the .tsx file:
 If your video uses different conventions, adapt the regexes near the top.
 """
 from __future__ import annotations
+import argparse
 import sys
 import re
 import json
@@ -188,19 +189,31 @@ def audit(tsx_path, timing_path, srt_path, drift_warn=1.5):
     return issues
 
 
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description=__doc__.split("\n\n")[0],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Beat data format and SECTION_CONFIG conventions: see the module docstring.",
+    )
+    parser.add_argument('tsx', help='Path to the Remotion video.tsx file containing beat arrays')
+    parser.add_argument('timing', help='Path to timing.json (output of generate_tts.py)')
+    parser.add_argument('srt', nargs='?', default=None,
+                        help='Path to podcast_audio.srt (defaults to <timing.json dir>/podcast_audio.srt)')
+    parser.add_argument('--drift-warn', type=float, default=1.5, metavar='SECONDS',
+                        help='Drift threshold in seconds; beats more than this far from any '
+                             'SRT entry start are flagged (default: 1.5)')
+    return parser
+
+
 def main():
-    if len(sys.argv) < 3:
-        print(__doc__)
+    args = build_parser().parse_args()
+    srt = args.srt or os.path.join(os.path.dirname(args.timing), 'podcast_audio.srt')
+    missing = [p for p in (args.tsx, args.timing, srt) if not os.path.exists(p)]
+    if missing:
+        for p in missing:
+            print(f"Not found: {p}", file=sys.stderr)
         sys.exit(1)
-    tsx = sys.argv[1]
-    timing = sys.argv[2]
-    srt = sys.argv[3] if len(sys.argv) > 3 else os.path.join(os.path.dirname(timing), 'podcast_audio.srt')
-    if not all(os.path.exists(p) for p in (tsx, timing, srt)):
-        for p in (tsx, timing, srt):
-            if not os.path.exists(p):
-                print(f"Not found: {p}", file=sys.stderr)
-        sys.exit(1)
-    issues = audit(tsx, timing, srt)
+    issues = audit(args.tsx, args.timing, srt, drift_warn=args.drift_warn)
     sys.exit(1 if issues else 0)
 
 

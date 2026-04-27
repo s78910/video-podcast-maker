@@ -105,11 +105,15 @@ def migrate(prefs_path, dry_run=False):
     return {"action": "migrated", "from": from_version, "to": PREFS_VERSION, "changes": changes}
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--prefs", default=None, help="Path to user_prefs.json (default: ${SKILL_DIR}/user_prefs.json)")
     parser.add_argument("--dry-run", action="store_true", help="Report changes without writing")
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
 
     prefs_path = args.prefs or os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

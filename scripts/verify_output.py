@@ -328,7 +328,7 @@ def verify(video_dir, strict=False, do_auto_fix=True):
         return 0, result
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('video_dir', help='Path to videos/<name>/')
     parser.add_argument('--strict', action='store_true', help='Fail on any warning')
@@ -337,7 +337,11 @@ def main():
                              'verify will create final_video.mp4 from video_with_bgm.mp4 '
                              'or output.mp4 if missing.')
     cli_envelope.add_format_arg(parser)
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
 
     started_at = time.time()
     json_mode = cli_envelope.use_json(args)
