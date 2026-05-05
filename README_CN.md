@@ -39,7 +39,7 @@
 **B站:**
 - **脚本结构** - 欢迎开场 + 一键三连片尾引导
 - **章节时间戳** - 自动生成 `MM:SS` 格式，直接复制到B站
-- **封面生成** - AI (imagen/imagenty) 或 Remotion，自动生成 16:9 + 4:3 双版本
+- **封面生成** - AI (imagen/imagen-qwen) 或 Remotion，自动生成 16:9 + 4:3 双版本
 - **视觉风格** - 大字饱满、极少留白、信息密度高
 - **发布信息** - 标题公式、标签策略、简介模板
 
@@ -95,7 +95,7 @@
 - **remotion-best-practices** - Remotion 官方最佳实践（必需，提供核心 Remotion 模式与规范）
 - **find-skills** - 官方技能发现工具（可选，用于查找和安装更多技能）
 - **ffmpeg** - 高级音视频处理（可选）
-- **imagen / imagenty** - AI 封面生成（可选）
+- **imagen / imagen-qwen** - AI 封面生成（可选）
 
 
 ## 环境要求

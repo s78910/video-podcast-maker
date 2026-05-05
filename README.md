@@ -40,7 +40,7 @@ Automated pipeline to create professional video podcasts from a topic. **Support
 **Bilibili:**
 - **Script Structure** - Welcome intro + call-to-action outro (一键三连)
 - **Chapter Timestamps** - Auto-generated `MM:SS` format for B站 chapters
-- **Thumbnail Generation** - AI (imagen/imagenty) or Remotion, auto-generates 16:9 + 4:3 versions
+- **Thumbnail Generation** - AI (imagen/imagen-qwen) or Remotion, auto-generates 16:9 + 4:3 versions
 - **Visual Style** - Bold text, minimal whitespace, high information density
 - **Publish Info** - Title formulas, tag strategies, description templates
 
@@ -96,7 +96,7 @@ This skill depends on **remotion-best-practices** and works alongside other opti
 - **remotion-best-practices** - Official Remotion best practices (required, provides core Remotion patterns and guidelines)
 - **find-skills** - Official skill discovery tool (optional, helps find and install additional skills)
 - **ffmpeg** - Advanced audio/video processing (optional)
-- **imagen / imagenty** - AI thumbnail generation (optional)
+- **imagen / imagen-qwen** - AI thumbnail generation (optional)
 
 
 ## Requirements
