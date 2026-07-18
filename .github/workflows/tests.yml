@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # ffmpeg/ffprobe are mocked in tests, but keep the binary available for
+      # any test that shells out to probe real fixtures.
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install pytest
+      - run: pytest -q
+
+  # The runtime tsconfig excludes templates/ (they compile inside the user's
+  # Remotion project); tsconfig.templates.json typechecks them standalone so
+  # a broken template can't ship silently.
+  typecheck-templates:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skills/video-podcast-maker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-package-lock
+      - run: npx tsc -p tsconfig.templates.json
